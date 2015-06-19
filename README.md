@@ -119,10 +119,12 @@ We are going to use Dynamic Programming to reduce the number of tilings we need 
 #### 1.2.1. The basic concept
 
 First let's divide the N \* 2 problem into N smaller problems of the form:
-- "What are the unique partial tilings cover completely an i \* 2 rectangle with the smallest number of squares?" for 0 < i <= N
+- "Which are the unique partial tilings covering completely an i \* 2 rectangle with the smallest number of squares?" for 0 < i <= N
 
 A partial tiling in this context is a tiling that:
+
 1. Fully covers a subset of the problem - from the 1st to the "i"th column all cells are covered by squares;
+
 2. May or may not cover cells beyond the "i"th column, but ONLY with squares that begin at or before the "i"th column;
 
 A partial tiling with covering i = N is a complete tiling (as by definition 1. all cells up to and including the "i"th column must be covered, when i = N that means the whole problem)
