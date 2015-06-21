@@ -2,6 +2,9 @@
 
 # Hybrid Minimal Square Tiling Problem Solver
 
+This project aimed at solving the problem from the second [Cimpress Tech Challenge](http://cimpress.com/techchallenge/).
+Sample inputs can be found in the Inputs folder - the original server used by the challenge is unavailable by now, so only the "Re-Solve Local Puzzle" button will work.
+
 Table of Contents
 
 <pre>
