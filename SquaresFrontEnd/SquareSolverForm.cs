@@ -19,7 +19,8 @@ namespace Squares
 {
     public partial class SquareSolverForm : Form
     {
-        private string registrationKey = "1ff02bc175a645d182c96cdfff43c81a";
+        private string puzzleServerUrl = "http://techchallenge.cimpress.com/";
+        private string registrationKey = "yourCimpressTechChallengeRegistrationKey";
 
         private string outputFolder = @".\\puzzles\\";
 
@@ -39,8 +40,8 @@ namespace Squares
 
             Directory.CreateDirectory(outputFolder + mode);
 
-            string puzzleUrl = "http://techchallenge.cimpress.com/" + registrationKey + "/" + mode + "/puzzle";
-            string solutionUrl = "http://techchallenge.cimpress.com/" + registrationKey + "/" + mode + "/solution";
+            string puzzleUrl = puzzleServerUrl + registrationKey + "/" + mode + "/puzzle";
+            string solutionUrl = puzzleServerUrl + registrationKey + "/" + mode + "/solution";
 
             var logFileName = outputFolder + mode + "_run.log";
 
@@ -53,7 +54,17 @@ namespace Squares
 
             DateTime timeStarted = DateTime.UtcNow;
 
-            string puzzle = new StreamReader(wrPuzzle.GetResponse().GetResponseStream()).ReadToEnd();
+            string puzzle;
+
+            try
+            {
+                puzzle = new StreamReader(wrPuzzle.GetResponse().GetResponseStream()).ReadToEnd();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("An error occured while retrieving a puzzle from the puzzle server: \n" + ex.Message);
+                return false;
+            }
 
             pr = JsonSerializer.DeserializeFromString<PuzzleRequest>(puzzle);
 
@@ -89,7 +100,17 @@ namespace Squares
 
             int internalTotalTime = (int)(DateTime.UtcNow - internalTimeStarted).TotalMilliseconds;
 
-            WebResponse solutionResponse = wrSolution.GetResponse();
+            WebResponse solutionResponse;
+
+            try
+            {
+                solutionResponse = wrSolution.GetResponse();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("An error occured while retrieving a puzzle from the puzzle server: \n" + ex.Message);
+                return false;
+            }
 
             int totalTime = (int)(DateTime.UtcNow - timeStarted).TotalMilliseconds;
 
@@ -187,19 +208,16 @@ namespace Squares
 
         private void btnSolveOnline_Click(object sender, EventArgs e)
         {
-            var ProcessPool = new List<Process>();
-
-            for (int i = 0; i < 9; i++)
-            {
-                ProcessPool.Add(Process.Start(@"SquaresService.exe", i.ToString()));
-            }
-
-            Thread.Sleep(3000);
+            var ProcessPool = StartServices();
 
             ThreadPool.QueueUserWorkItem(async arg =>
             {
                 // Always do one trial run to warm up the services
-                if (!await MainSolverThread("trial")) return;
+                if (!await MainSolverThread("trial"))
+                {
+                    StopServices(ProcessPool);
+                    return;
+                }
 
                 int count = 0;
 
@@ -212,19 +230,39 @@ namespace Squares
                     if (!await MainSolverThread(mode)) break;
                 }
 
-                Thread.Sleep(2000);
+                MessageBox.Show("Puzzle solving complete. You can review the services' console output. Click OK to clean-up.");
 
-                foreach (var process in ProcessPool)
-                {
-                    try
-                    {
-                        process.Kill();
-                    }
-                    catch
-                    {
-                    }
-                }
+                StopServices(ProcessPool);
             });
+        }
+
+        private static void StopServices(List<Process> ProcessPool)
+        {
+            Thread.Sleep(2000);
+
+            foreach (var process in ProcessPool)
+            {
+                try
+                {
+                    process.Kill();
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        private static List<Process> StartServices()
+        {
+            var ProcessPool = new List<Process>();
+
+            for (int i = 0; i < 9; i++)
+            {
+                ProcessPool.Add(Process.Start(@"SquaresService.exe", i.ToString()));
+            }
+
+            Thread.Sleep(3000);
+            return ProcessPool;
         }
 
         bool[,] map;

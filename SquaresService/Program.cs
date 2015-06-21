@@ -23,9 +23,16 @@ namespace SquaresService
             SquareTilingCombinatorics.Init();
 
             var listeningOn = args.Length == 0 ? "http://localhost:1330/" : "http://localhost:890" + args[0] + "/";
-            var appHost = new AppHost()
-                .Init()
-                .Start(listeningOn);
+            var appHost = new AppHost().Init();
+
+            try { appHost.Start(listeningOn);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Service was unable to start.");
+                Console.WriteLine(ex.Message);
+                return;
+            }
 
             Console.WriteLine("AppHost Created at {0}, listening on {1}",
                 DateTime.Now, listeningOn);
