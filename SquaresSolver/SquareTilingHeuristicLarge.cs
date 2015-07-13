@@ -12,6 +12,8 @@ namespace SquaresSolver
         {
         }
 
+        private bool stopTiling = false;
+
         protected override List<Square> SolveHeuristic()
         {
             timeStarted = DateTime.UtcNow;
@@ -35,6 +37,8 @@ namespace SquaresSolver
             for (int x = 0; x < N; x++)
             {
                 minnewcost = int.MaxValue;
+
+                stopTiling = false;
 
                 foreach(var path in left)
                 {
@@ -76,6 +80,8 @@ namespace SquaresSolver
                     }
 
                     Tile(x, 0, p, p.cost, right);
+
+                    if (right.Count > RunTimeConfiguration.HeuristicsMaxUniqueTiles) break;
                 }
 
                 left = right.Values.ToArray<PathStateLarge>();
@@ -101,9 +107,10 @@ namespace SquaresSolver
 
                 double time  = (DateTime.UtcNow - timeStarted).TotalMilliseconds;
 
-                if (time > 7000) m_costMargin = 0;
-                if (time > 6000) m_costMargin = 2;
-                else if (x < 20 && time > 4000) m_costMargin = 3;
+                if (time > RunTimeConfiguration.HeuristicsTurnOnGreedy) m_sizeDeviation = 0;
+                else if (time > RunTimeConfiguration.HeuristicsCostReductionGate3) m_costMargin = 0;
+                else if (time > RunTimeConfiguration.HeuristicsCostReductionGate2) m_costMargin = 2;
+                else if (x < 20 && time > RunTimeConfiguration.HeuristicsCostReductionGate1) m_costMargin = 3;
             }
 
             var solution = GetSolution(left);
@@ -128,6 +135,11 @@ namespace SquaresSolver
                 {
                     p.cost = cost;
                     right.Add(key, new PathStateLarge(p));
+
+                    if (right.Count > RunTimeConfiguration.HeuristicsMaxUniqueTiles)
+                    {
+                        stopTiling = true;
+                    }
                 }
                 else
                 {
@@ -153,6 +165,8 @@ namespace SquaresSolver
                 }
 
                 Tile(x, y + i, p, cost + 1, right);
+                
+                if (stopTiling) break;
 
                 if (minnewcost < int.MaxValue && i <= blockMaxSize - m_sizeDeviation) break;
             }

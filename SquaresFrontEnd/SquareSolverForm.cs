@@ -374,7 +374,7 @@ namespace Squares
                     }
                 }
 
-                if ((DateTime.UtcNow - begin).TotalMilliseconds > 9500) break;
+                if ((DateTime.UtcNow - begin).TotalMilliseconds > RunTimeConfiguration.TaskTimeout) break;
 
             } while (stillWaiting);
 
@@ -513,7 +513,7 @@ namespace Squares
             }
             else
             {
-                squareTiling = new SquareTilingHeuristicLarge(map, false, costMargin);
+                squareTiling = new SquareTilingHeuristicLarge(map, false, costMargin, 0);
             }
 
             var solution = squareTiling.Solve();

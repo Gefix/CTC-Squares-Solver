@@ -40,7 +40,7 @@ namespace SquaresSolver
 
             if (m_improve)
             {
-                int subWidth = 15;
+                int subWidth = 14;
                 int subStep = 10;
 
                 SubSolveHorizontal(ref solution, 0, subStep, N, subWidth);
@@ -121,6 +121,8 @@ namespace SquaresSolver
                     }
 
                     Tile(x, 0, p, p.cost, right);
+
+                    if (right.Count > RunTimeConfiguration.HeuristicsMaxUniqueTiles) break;
                 }
 
                 left = right.Values.ToArray<PathStateMedium>();
@@ -146,9 +148,10 @@ namespace SquaresSolver
 
                 double time  = (DateTime.UtcNow - timeStarted).TotalMilliseconds;
 
-                if (time > 7000) m_costMargin = 0;
-                if (time > 6000) m_costMargin = 2;
-                else if (x < 20 && time > 4000) m_costMargin = 3;
+                if (time > RunTimeConfiguration.HeuristicsTurnOnGreedy) m_sizeDeviation = 0;
+                else if (time > RunTimeConfiguration.HeuristicsCostReductionGate3) m_costMargin = 0;
+                else if (time > RunTimeConfiguration.HeuristicsCostReductionGate2) m_costMargin = 2;
+                else if (x < 20 && time > RunTimeConfiguration.HeuristicsCostReductionGate1) m_costMargin = 3;
             }
 
             var solution = GetSolution(left);
@@ -231,7 +234,7 @@ namespace SquaresSolver
 
             for (; sY >= 0 && sY + dY <= M; sY += vY)
             {
-                if ((DateTime.UtcNow - timeStarted).TotalMilliseconds > 8500) return;
+                if ((DateTime.UtcNow - timeStarted).TotalMilliseconds > RunTimeConfiguration.HeuristicsStopOptimizing) return;
 
                 bool[,] subMap = new bool[N, dY];
 
@@ -297,7 +300,7 @@ namespace SquaresSolver
 
             for (; sX >= 0 && sX + dX <= N; sX += vX)
             {
-                if ((DateTime.UtcNow - timeStarted).TotalMilliseconds > 8500) return;
+                if ((DateTime.UtcNow - timeStarted).TotalMilliseconds > RunTimeConfiguration.HeuristicsStopOptimizing) return;
 
                 bool[,] subMap = new bool[M, dX];
 

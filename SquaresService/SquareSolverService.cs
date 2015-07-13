@@ -32,7 +32,14 @@ namespace SquaresService
             }
             else
             {
-                solver = new SquareTilingHeuristicLarge(map, true, request.CostMargin);
+                if (N >= M)
+                {
+                    solver = new SquareTilingHeuristicLarge(map, true, request.CostMargin);
+                }
+                else
+                {
+                    solver = new SquareTilingHeuristicLarge(map, true, 0, 0);
+                }
             }
 
             return new SquareSolverResponse { Solution = solver.Solve() };
