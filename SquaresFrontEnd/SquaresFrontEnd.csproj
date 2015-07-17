@@ -90,6 +90,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="SolverHelper.cs" />
     <Compile Include="SquareSolverForm.cs">
       <SubType>Form</SubType>
     </Compile>

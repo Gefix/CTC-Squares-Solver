@@ -18,7 +18,7 @@ namespace SquaresSolver
 
         protected int[] MinSquares;
 
-        public SquareTilingHeuristic(bool[,] map, bool improve = false, int costMargin = 0, int sizeDeviation = 2) :
+        public SquareTilingHeuristic(bool[,] map, bool improve = false, int costMargin = 0, int sizeDeviation = 3) :
             base(map)
         {
             m_costMargin = costMargin;
@@ -41,7 +41,7 @@ namespace SquaresSolver
             if (m_improve)
             {
                 int subWidth = 14;
-                int subStep = 10;
+                int subStep = 5;
 
                 SubSolveHorizontal(ref solution, 0, subStep, N, subWidth);
 

@@ -4,8 +4,6 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Net;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Threading;
@@ -19,11 +17,6 @@ namespace Squares
 {
     public partial class SquareSolverForm : Form
     {
-        private string puzzleServerUrl = "http://techchallenge.cimpress.com/";
-        private string registrationKey = "yourCimpressTechChallengeRegistrationKey";
-
-        private string outputFolder = @".\\puzzles\\";
-
         public SquareSolverForm()
         {
             InitializeComponent();
@@ -34,31 +27,15 @@ namespace Squares
             }
         }
 
-        private async Task<bool> MainSolverThread(Object o)
+        private async Task<bool> OnlineSolverTask(string mode)
         {
-            string mode = (o as string) != null ? (string)o : "trial";
-
-            Directory.CreateDirectory(outputFolder + mode);
-
-            string puzzleUrl = puzzleServerUrl + registrationKey + "/" + mode + "/puzzle";
-            string solutionUrl = puzzleServerUrl + registrationKey + "/" + mode + "/solution";
-
-            var logFileName = outputFolder + mode + "_run.log";
-
-            WebRequest wrPuzzle = WebRequest.Create(puzzleUrl);
-            var wrSolution = (HttpWebRequest)WebRequest.Create(solutionUrl);
-
-            wrSolution.Method = "POST";
+            DateTime timeStarted = DateTime.UtcNow;
 
             PuzzleRequest pr;
 
-            DateTime timeStarted = DateTime.UtcNow;
-
-            string puzzle;
-
             try
             {
-                puzzle = new StreamReader(wrPuzzle.GetResponse().GetResponseStream()).ReadToEnd();
+                pr = SolverHelper.FetchOnlinePuzzle(mode);
             }
             catch (Exception ex)
             {
@@ -66,45 +43,20 @@ namespace Squares
                 return false;
             }
 
-            pr = JsonSerializer.DeserializeFromString<PuzzleRequest>(puzzle);
-
-            DateTime internalTimeStarted = DateTime.UtcNow;
-
-            string outputFileName = outputFolder + mode + "\\" + pr.id + ".json";
-
-            using (var output = new StreamWriter(new FileStream(outputFileName, FileMode.Append)))
-            {
-                output.Write(puzzle);
-            }
-
             int resultsCount;
             int bestApproach;
 
+            DateTime internalTimeStarted = DateTime.UtcNow;
+
             var solution = findBestTiling(pr, out resultsCount, out bestApproach);
-
-            PuzzleResponse response = new PuzzleResponse();
-
-            response.id = pr.id;
-            response.SetSquares(solution);
-
-            string postData = JsonSerializer.SerializeToString<PuzzleResponse>(response);
-
-            //Console.WriteLine(postData);
-
-            wrSolution.ContentType = "application/json";
-            wrSolution.Accept = "application/json";
-            Stream dataStream = wrSolution.GetRequestStream();
-            dataStream.Write(postData);
-            dataStream.Flush();
-            dataStream.Close();
 
             int internalTotalTime = (int)(DateTime.UtcNow - internalTimeStarted).TotalMilliseconds;
 
-            WebResponse solutionResponse;
-
+            string responseFromServer;
+            
             try
             {
-                solutionResponse = wrSolution.GetResponse();
+                responseFromServer = SolverHelper.SendOnlineResponse(pr, mode, solution);
             }
             catch (Exception ex)
             {
@@ -114,23 +66,88 @@ namespace Squares
 
             int totalTime = (int)(DateTime.UtcNow - timeStarted).TotalMilliseconds;
 
-            dataStream = solutionResponse.GetResponseStream();
-            StreamReader reader = new StreamReader (dataStream);
-            string responseFromServer = reader.ReadToEnd();
+            string logLine = SolverHelper.LogOnlineResult(mode, responseFromServer, resultsCount, internalTotalTime, totalTime);
 
-            Console.WriteLine(responseFromServer);
+            UpdateGUI(pr, resultsCount, bestApproach, solution, logLine);
 
-            reader.Close();
-            dataStream.Close();
-            solutionResponse.Close();
+            return await CleanupWorkers();
+        }
 
-            string logLine = responseFromServer + " [" + totalTime.ToString() + " ms, " + internalTotalTime.ToString() + " ms, " + resultsCount.ToString() + " results]";
+        private async Task<bool> LocalSolverTask(string fileName)
+        {
+            DateTime timeStarted = DateTime.UtcNow;
 
-            using (var output = new StreamWriter(new FileStream(logFileName, FileMode.Append)))
+            PuzzleRequest pr;
+
+            try
             {
-                output.WriteLine(logLine);
+                pr = SolverHelper.FetchLocalPuzzle(fileName);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("An error occured while retrieving a local puzzle: \n" + ex.Message);
+                return false;
             }
 
+            int resultsCount;
+            int bestApproach;
+
+            DateTime internalTimeStarted = DateTime.UtcNow;
+
+            var solution = findBestTiling(pr, out resultsCount, out bestApproach);
+
+            int internalTotalTime = (int)(DateTime.UtcNow - internalTimeStarted).TotalMilliseconds;
+
+            int totalTime = (int)(DateTime.UtcNow - timeStarted).TotalMilliseconds;
+
+            string logLine = SolverHelper.LogLocalResult(fileName, solution.Count, resultsCount, internalTotalTime, totalTime);
+
+            UpdateGUI(pr, resultsCount, bestApproach, solution, logLine);
+
+            return await CleanupWorkers();
+        }
+
+        private async Task<bool> CleanupWorkers()
+        {
+            foreach (var thread in threads)
+            {
+                thread.Join();
+            }
+
+            try
+            {
+                List<Task<CleanupRequestResponse>> cleanupTasks = new List<Task<CleanupRequestResponse>>();
+
+                for (int i = 0; i < 9; i++)
+                {
+                    var client = new JsonServiceClient("http://localhost:" + (8900 + i).ToString() + "/");
+
+                    var cleanup = client.PostAsync<CleanupRequestResponse>(new CleanupRequest());
+                    cleanupTasks.Add(cleanup);
+                }
+
+                foreach (var task in cleanupTasks)
+                {
+                    var result = await task;
+
+                    if (result.success != true)
+                    {
+                        MessageBox.Show("Something Strange Happened");
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+            catch
+            {
+                MessageBox.Show("Something Bad Happened");
+                return false;
+            }
+        }
+
+        private void UpdateGUI(PuzzleRequest pr, int resultsCount, int bestApproach, List<Square> solution, string logLine)
+        {
             this.Invoke((MethodInvoker)delegate
             {
                 int n = pr.width;
@@ -168,42 +185,6 @@ namespace Squares
 
                 pictureBox1.Refresh();
             });
-
-            foreach (var thread in threads)
-            {
-                thread.Join();
-            }
-
-            try
-            {
-                List<Task<CleanupRequestResponse>> cleanupTasks = new List<Task<CleanupRequestResponse>>();
-
-                for (int i = 0; i < 9; i++)
-                {
-                    var client = new JsonServiceClient("http://localhost:" + (8900 + i).ToString() + "/");
-
-                    var cleanup = client.PostAsync<CleanupRequestResponse>(new CleanupRequest());
-                    cleanupTasks.Add(cleanup);
-                }
-
-                foreach (var task in cleanupTasks)
-                {
-                    var result = await task;
-
-                    if (result.success != true)
-                    {
-                        MessageBox.Show("Something Strange Happened");
-                        return false;
-                    }
-                }
-            }
-            catch
-            {
-                MessageBox.Show("Something Bad Happened");
-                return false;
-            }
-
-            return true;
         }
 
         private void btnSolveOnline_Click(object sender, EventArgs e)
@@ -213,7 +194,7 @@ namespace Squares
             ThreadPool.QueueUserWorkItem(async arg =>
             {
                 // Always do one trial run to warm up the services
-                if (!await MainSolverThread("trial"))
+                if (!await OnlineSolverTask("trial"))
                 {
                     StopServices(ProcessPool);
                     return;
@@ -227,7 +208,7 @@ namespace Squares
 
                 for (int i = 0; i < count; i++)
                 {
-                    if (!await MainSolverThread(mode)) break;
+                    if (!await OnlineSolverTask(mode)) break;
                 }
 
                 MessageBox.Show("Puzzle solving complete. You can review the services' console output. Click OK to clean-up.");
@@ -523,92 +504,29 @@ namespace Squares
 
         private void workerThread(Object o)
         {
-            PuzzleRequest pr = (PuzzleRequest)o;
-
-            var ProcessPool = new List<Process>();
-
-            for (int i = 0; i < 9; i++)
-            {
-                ProcessPool.Add(Process.Start(@"SquaresService.exe", i.ToString()));
-            }
-
-            Thread.Sleep(3000);
-
-            int resultsCount;
-            int bestApproach;
-
-            DateTime started = DateTime.UtcNow;
-
-            shownSolution = findBestTiling(pr, out resultsCount, out bestApproach);
-
-            int time = (int)(DateTime.UtcNow - started).TotalMilliseconds;
-
-            foreach (var process in ProcessPool)
-            {
-                try
-                {
-                    process.Kill();
-                }
-                catch
-                {
-                }
-            }
-
-            this.Invoke((MethodInvoker)delegate
-            {
-                this.pictureBox1.Refresh();
-
-                this.labelSquareCount.Text = shownSolution.Count.ToString();
-
-                this.labelResultsProcessed.Text = resultsCount.ToString();
-
-                lbLog.Items.Add(time.ToString());
-
-                int visibleItems = lbLog.ClientSize.Height / lbLog.ItemHeight;
-                lbLog.TopIndex = Math.Max(lbLog.Items.Count - visibleItems + 1, 0);
-
-                this.cbTranspose.Checked = (bestApproach >> 2) % 2 == 1;
-                this.cbInverseX.Checked = (bestApproach >> 1) % 2 == 1;
-                this.cbInverseY.Checked = bestApproach % 2 == 1;
-            });
         }
 
         private void btnSolveLocal_Click(object sender, EventArgs e)
         {
-            PuzzleRequest pr;
-
             DialogResult result = openLocalFileDialog.ShowDialog();
 
-            if (result != System.Windows.Forms.DialogResult.OK) return;
+            if (result != System.Windows.Forms.DialogResult.OK || openLocalFileDialog.FileNames.Count() == 0) return;
 
-            using (var inputStream = new FileStream(openLocalFileDialog.FileName, FileMode.Open))
+            string[] fileNames = openLocalFileDialog.FileNames;
+
+            var ProcessPool = StartServices();
+
+            ThreadPool.QueueUserWorkItem(async arg =>
             {
-                pr = JsonSerializer.DeserializeFromStream<PuzzleRequest>(inputStream);
-            }
-
-            bool transpose = false;
-            bool invX = false;
-            bool invY = false;
-
-            int n = transpose ? pr.height : pr.width;
-            int m = transpose ? pr.width : pr.height;
-
-            map = new bool[n, m];
-
-            for (int y = 0; y < m; y++)
-            {
-                for (int x = 0; x < n; x++)
+                foreach (string fileName in openLocalFileDialog.FileNames)
                 {
-                    int ix = invX ? n - x - 1 : x;
-                    int iy = invY ? m - y - 1 : y;
-
-                    map[ix, iy] = transpose ? pr.puzzle[x][y] : pr.puzzle[y][x];
+                    if (!await LocalSolverTask(fileName)) break;
                 }
-            }
 
-            pictureBox1.Refresh();
+                MessageBox.Show("Puzzle solving complete. You can review the services' console output. Click OK to clean-up.");
 
-            ThreadPool.QueueUserWorkItem(workerThread, pr);
+                StopServices(ProcessPool);
+            });
         }
 
         private void pictureBox1_Paint(object sender, PaintEventArgs e)

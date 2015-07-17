@@ -62,7 +62,7 @@
             this.btnSolveLocal.Name = "btnSolveLocal";
             this.btnSolveLocal.Size = new System.Drawing.Size(146, 23);
             this.btnSolveLocal.TabIndex = 1;
-            this.btnSolveLocal.Text = "Re-Solve Local Puzzle";
+            this.btnSolveLocal.Text = "Re-Solve Local Puzzles";
             this.btnSolveLocal.UseVisualStyleBackColor = true;
             this.btnSolveLocal.Click += new System.EventHandler(this.btnSolveLocal_Click);
             // 
@@ -185,6 +185,7 @@
             // 
             this.openLocalFileDialog.Filter = "Json Puzzles|*.json";
             this.openLocalFileDialog.InitialDirectory = ".";
+            this.openLocalFileDialog.Multiselect = true;
             // 
             // SquareSolverForm
             // 
